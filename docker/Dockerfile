@@ -1,63 +1,52 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-FROM --platform=linux/amd64 mambaorg/micromamba:1.5.5-jammy as base
+FROM nvcr.io/nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04
 
-# Create new user
-ARG NEW_MAMBA_USER_ID=57440
-ARG NEW_MAMBA_USER_GID=57440
+# Copy uv from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-USER root
+# Install wget, zstd, and sudo
+RUN apt-get update && apt-get install -y wget zstd sudo && rm -rf /var/lib/apt/lists/* && apt-get clean
 
-RUN if grep -q '^ID=alpine$' /etc/os-release; then \
-  # alpine does not have usermod/groupmod
-  apk add --no-cache --virtual temp-packages shadow=4.13-r0; \
-  fi
-RUN if [ "$(id ${MAMBA_USER} -u)" != "$NEW_MAMBA_USER_ID" ]; then \
-  usermod "-u ${NEW_MAMBA_USER_ID}" "${MAMBA_USER}"; \
-  fi
-RUN if [ "$(id ${MAMBA_USER} -g)" != "$NEW_MAMBA_USER_GID" ]; then \
-  groupmod -o -g ${NEW_MAMBA_USER_GID} ${MAMBA_USER} && \
-  usermod -g ${NEW_MAMBA_USER_GID} ${MAMBA_USER}; \
-  fi
-RUN if grep -q '^ID=alpine$' /etc/os-release; then \
-  # remove the packages that were only needed for usermod/groupmod
-  apk del temp-packages; \
-  fi
+# Download and install standalone Python 3.12
+RUN wget -O /tmp/python.tar.zst https://github.com/astral-sh/python-build-standalone/releases/download/20251120/cpython-3.12.12+20251120-x86_64_v3-unknown-linux-gnu-pgo+lto-full.tar.zst
+RUN cd /tmp && tar -I zstd -xf python.tar.zst
+RUN cp -r /tmp/python/install/* /usr/local/
+RUN rm -rf /tmp/python.tar.zst /tmp/python
 
-USER $MAMBA_USER
+# Create a non-root user for running JupyterLab with passwordless sudo
+RUN useradd -m -s /bin/bash jupyter && \
+    echo "jupyter ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Add the pip user installation path
-ENV PATH="/home/${MAMBA_USER}/.local/bin:${PATH}"
+# Set up working directory
+WORKDIR /home/jupyter
 
-# Install base dev tools with conda
-RUN --mount=type=cache,target=/jupyterlab/conda-cache,uid=${NEW_MAMBA_USER_ID},gid=${NEW_MAMBA_USER_GID} \
-    CONDA_PKGS_DIRS="/jupyterlab/conda-cache" micromamba install -c nodefaults -c conda-forge -yn base nodejs=20.1 yarn=3 git python=3 less vim nano
+# Create venv and install packages inside it
+ENV VIRTUAL_ENV=/home/jupyter/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN uv venv --python /usr/local/bin/python3 $VIRTUAL_ENV
+RUN uv pip install --upgrade pip
+RUN uv pip install \
+    jupyterlab \
+    ipywidgets \
+    numpy \
+    pandas \
+    matplotlib \
+    jupyter-resource-usage \
+    jupyterlab-execute-time
 
-ENV EDITOR=nano
+# Copy configuration and shell files
+COPY jupyter_server_config.json /home/jupyter/.jupyter/jupyter_server_config.json
+COPY bashrc /home/jupyter/.bashrc
+COPY profile /home/jupyter/.profile
+RUN chown -R jupyter:jupyter /home/jupyter
 
-WORKDIR /home/$MAMBA_USER/jupyterlab_cache
-
-COPY --chown=$MAMBA_USER:$MAMBA_USER pyproject.toml LICENSE README.md ./
-COPY --chown=$MAMBA_USER:$MAMBA_USER jupyterlab/_version.py ./jupyterlab/_version.py
-
-# Install all python dependencies only with pip to maximize using its cache
-RUN --mount=type=cache,target=/jupyterlab/pip-cache,uid=${NEW_MAMBA_USER_ID},gid=${NEW_MAMBA_USER_GID} \
-    PIP_CACHE_DIR="/jupyterlab/pip-cache" SKIP_JUPYTER_BUILDER=1 micromamba run python -m pip install -e  ".[dev,docs,test]" && \
-    cd / && \
-    rm -rf /home/$MAMBA_USER/jupyterlab_cache
-
+# Expose JupyterLab port
 EXPOSE 8888
 
-FROM base as dev
+# Switch to non-root user
+USER jupyter
 
-COPY --chown=$MAMBA_USER:$MAMBA_USER . .
-
-# Build the cache in /home/$MAMBA_USER/jupyterlab_cache
-RUN micromamba run yarn install
-
-WORKDIR /home/$MAMBA_USER/jupyterlab
-
-RUN micromamba install -n base -c conda-forge rsync -y && \
-    micromamba run rsync -ar /home/$MAMBA_USER/jupyterlab_cache/. /home/$MAMBA_USER/jupyterlab && \
-    micromamba run python -m pip install -e  "."
+# Activate venv and run JupyterLab
+CMD ["/home/jupyter/.venv/bin/jupyter", "lab", "--config=/home/jupyter/.jupyter/jupyter_server_config.json"]

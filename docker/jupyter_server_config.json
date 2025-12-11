@@ -4,9 +4,14 @@
     "ip": "0.0.0.0",
     "port": 8888,
     "open_browser": false,
-    "root_dir": "/home/micromamba/jlab_root"
+    "root_dir": "/home/jupyter",
+    "token": "",
+    "password": "argon2:$argon2id$v=19$m=10240,t=10,p=8$K05J8EQHhBn+Z3QyztuKfA$NdS6wwlsAw+VMzJT+PBA81MuBEMSax0T7+xij8AzXgY",
+    "terminado_settings": {
+      "shell_command": ["/bin/bash", "-l"]
+    }
   },
-  "LabApp": {
-    "dev_mode": true
+  "IdentityProvider": {
+    "token": ""
   }
 }

@@ -1,7 +1,7 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-FROM nvcr.io/nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04
+FROM nvcr.io/nvidia/cuda:13.1.0-cudnn-devel-ubuntu24.04
 
 # Copy uv from official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -10,7 +10,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN apt-get update && apt-get install -y wget zstd sudo && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # Download and install standalone Python 3.12
-RUN wget -O /tmp/python.tar.zst https://github.com/astral-sh/python-build-standalone/releases/download/20251120/cpython-3.12.12+20251120-x86_64_v3-unknown-linux-gnu-pgo+lto-full.tar.zst
+RUN wget -O /tmp/python.tar.zst https://github.com/astral-sh/python-build-standalone/releases/download/20251217/cpython-3.12.12+20251217-x86_64_v3-unknown-linux-gnu-pgo+lto-full.tar.zst
 RUN cd /tmp && tar -I zstd -xf python.tar.zst
 RUN cp -r /tmp/python/install/* /usr/local/
 RUN rm -rf /tmp/python.tar.zst /tmp/python

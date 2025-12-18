@@ -1,7 +1,7 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-FROM nvcr.io/nvidia/cuda:13.1.0-cudnn-devel-ubuntu24.04
+FROM nvcr.io/nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04
 
 # Copy uv from official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
